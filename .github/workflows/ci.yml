@@ -1,0 +1,49 @@
+name: CI Pipeline
+
+on:
+  push:
+    branches: [ dev, main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - uses: actions/setup-python@v4
+      with:
+        python-version: '3.9'
+
+    - name: Install dependencies
+      run: |
+        pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install dvc
+
+    - name: Pull DVC-tracked data and model
+      run: dvc pull
+
+    - name: Run Pytest
+      run: pytest tests/ --junitxml=report.xml
+
+    - name: Upload Pytest report
+      uses: actions/upload-artifact@v4
+      with:
+        name: pytest-report
+        path: report.xml
+
+    - name: Setup CML
+      uses: iterative/setup-cml@v1
+      with:
+        version: 'latest'
+
+    - name: Comment report on PR using CML
+      if: github.event_name == 'pull_request'
+      env:
+        REPO_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        pip install cml
+        cml comment create --file report.xml
